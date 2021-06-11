@@ -6,59 +6,59 @@ const stripe = require("stripe")(functions.config().stripe.secret);
 const eeClient = require('elasticemail-webapiclient').client;
 
 exports.createConnectWorker = functions.https.onRequest( (req, res) => {
-    cors (req, res, async () => {
-      
-      if (req.method !== "POST") {
-        res.status(400).send("Please send a POST request");
-        return;
-      }
-  
-      const data = req.body;
-  
-      if (!data.hasOwnProperty("email") || !data.email) {
-        res.status(400).send("Email address is required");
-        return;
-      }
-  
-      if (!data.hasOwnProperty("uid") || !data.uid) {
-        res.status(400).send("Id is required");
-        return;
-      }
+  cors (req, res, async () => {
+    
+    if (req.method !== "POST") {
+      res.status(400).send("Please send a POST request");
+      return;
+    }
 
-      try {
-        const account = await stripe.accounts.create({
-              country: 'US',
-              type: 'express',
-              capabilities: {
-                transfers: {
-                  requested: true,
-                },
+    const data = req.body;
+
+    if (!data.hasOwnProperty("email") || !data.email) {
+      res.status(400).send("Email address is required");
+      return;
+    }
+
+    if (!data.hasOwnProperty("uid") || !data.uid) {
+      res.status(400).send("Id is required");
+      return;
+    }
+
+    try {
+      const account = await stripe.accounts.create({
+            country: 'US',
+            type: 'express',
+            capabilities: {
+              transfers: {
+                requested: true,
               },
+            },
+          });
+
+          try {
+            const accountLink = await stripe.accountLinks.create({
+              type: "account_onboarding",
+              account: account.id,
+              refresh_url: 'https://domain.com/onboarding-error/',
+              return_url: 'https://domain.com/dashboard?success=true',
             });
+            
+            res.status(200).send({ accountId: account.id, accountLink: accountLink});
+            
+          } catch (err) {
+            res.status(500).send({
+              error: err.message
+            });
+          }
+      
+    } catch (err) {
+      res.status(500).send({
+        error: err.message
+      });
+    }
 
-            try {
-              const accountLink = await stripe.accountLinks.create({
-                type: "account_onboarding",
-                account: account.id,
-                refresh_url: 'https://domain.com/onboarding-error/',
-                return_url: 'https://domain.com/dashboard?success=true',
-              });
-              
-              res.status(200).send({ accountId: account.id, accountLink: accountLink});
-              
-            } catch (err) {
-              res.status(500).send({
-                error: err.message
-              });
-            }
-        
-      } catch (err) {
-        res.status(500).send({
-          error: err.message
-        });
-      }
-
-    });
+  });
 });
 
 exports.sendEmailNotification = functions.firestore.document('notifications/{id}').onCreate(async (snap, context) => {
@@ -203,15 +203,18 @@ exports.sendEmailNotification = functions.firestore.document('notifications/{id}
         return send;
     
       } catch (err) {
-        return null;
+        res.status(500).send({
+          error: err.message
+        });
       }
   
     } catch (err) {
-      return null;
+      res.status(500).send({
+        error: err.message
+      });
     }
   }
 });
-
 
 exports.createPaymentIntent = functions.https.onRequest( (req, res) => {
   cors (req, res, async () => {
